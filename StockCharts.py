@@ -24,15 +24,22 @@ ranges = {'day': '1d',
 symbol = yf.Ticker('TSLA')
 hist = symbol.history(period='1y')
 
-#plotly -> create [Input fig = go.Figure(data=go.candlestick)]
-mainChart = go.Figure(data=go.Scatter(x=hist.index, y=hist['Close'], mode='lines+markers'))
+#plotly -> create
+mainChart = make_subplots(specs=[[{"secondary_y": True}]])
+#Candlestick main trace
+mainChart.add_trace(go.Candlestick(x=hist.index,
+                                           open=hist['Open'],
+                                           high=hist['High'],
+                                           low=hist['Low'],
+                                           close=hist['Close']))
 
-#Volume subchart
-volumeChart = make_subplots(specs=[[{"secondary_y": True}]])
-volumeChart.add_trace(go.Scatter(x=hist.index,y=hist['Close'],name='Price'),secondary_y=False)
-volumeChart.add_trace(go.Bar(x=hist.index,y=hist['Volume'],name='Volume'),secondary_y=True)
-volumeChart.update_yaxes(range=[0,7000000000],secondary_y=True)
-volumeChart.update_yaxes(visible=False, secondary_y=True)
+#volume trace
+mainChart.add_trace(go.Bar(x=hist.index,y=hist['Volume'],name='Volume'),secondary_y=True)
+#descales volume
+mainChart.update_yaxes(range=[0,5000000000],secondary_y=True)
+mainChart.update_yaxes(visible=False, secondary_y=True)
+
+#MA20 trace
 
 mainChart.show()
-volumeChart.show()
+#volumeChart.show()
