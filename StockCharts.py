@@ -1,11 +1,19 @@
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
+# for applet
+import dash
+from dash import dcc, html
+from dash.dependencies import Input, Output
+import pandas as pd
+# for timeFunc
 import datetime
 import pickle
 
+app = dash.Dash(__name__)
 
-def timeFunc(str):
+
+def timeFunc(selected_time_range):
     ranges = {'day': 2,
               'week': 5,
               'month': 30,
@@ -24,28 +32,29 @@ def timeFunc(str):
               }
     today = datetime.date.today()
     inputChange = []
-    with open('lastDate.pkl', 'rb') as file:
+    with open('variables/lastDate.pkl', 'rb') as file:
         lastDate = pickle.load(file)
     # ytd call
-    if 'ytd' == ranges[str]:
-        with open('ytdCall.pkl', 'rb') as file:
+    if 'ytd' == selected_time_range or 'ytd' == ranges[selected_time_range]:
+        with open('variables/ytdCall.pkl', 'rb') as file:
             ytdCall = pickle.load(file)
         while not 0 == ((today-lastDate).days):
             lastDate = lastDate + datetime.timedelta(days=1)
             if lastDate.weekday() < 5:
-                print("appended:", lastDate)
                 inputChange.append(lastDate)
-        with open('lastDate.pkl', 'wb') as file:
-            print("lastDate", lastDate)
+        with open('variables/lastDate.pkl', 'wb') as file:
             pickle.dump(lastDate, file)
         ytdCall = ytdCall - len(inputChange)
-        with open('ytdCall.pkl', 'wb') as file:
+        with open('variables/ytdCall.pkl', 'wb') as file:
             pickle.dump(ytdCall, file)
         return ytdCall
 
     # normal return
     else:
-        loggedDays = ranges[str]
+        loggedDays = ranges.get(selected_time_range, 0)
+        if loggedDays == 'max':
+            return 0
+        loggedDays = int(loggedDays)
         while loggedDays > -1:
             inputChange.append(today)
             if today.weekday() > 4:
@@ -55,44 +64,77 @@ def timeFunc(str):
         return (-1 * len(inputChange))
 
 
-# symbol = yf.Ticker(input("Enter a Ticker"))
-symbol = yf.Ticker('TSLA')
-hist = symbol.history(period='max')
-# plotly -> create
-mainChart = make_subplots(specs=[[{"secondary_y": True}]])
-# Candlestick main trace
-mainChart.add_trace(go.Candlestick(x=hist.index,
-                                   open=hist['Open'],
-                                   high=hist['High'],
-                                   low=hist['Low'],
-                                   close=hist['Close']))
+app.layout = html.Div([
+    html.Div([
+        dcc.Graph(id='mainChart'),
+        dcc.Dropdown(
+            id='time-range',
+            options=[
+                {'label': '1 Month', 'value': 'month'},
+                {'label': '3 Months', 'value': '3 months'},
+                {'label': '6 Months', 'value': '6 months'},
+                {'label': '1 Year', 'value': 'year'},
+                {'label': '2 Years', 'value': '2 years'},
+                {'label': '5 Years', 'value': '5 years'},
+                {'label': '10 Years', 'value': '10 years'},
+                {'label': 'YTD', 'value': 'ytd'},
+                {'label': 'max', 'value': 'max'},
+            ],
+            placeholder="Select a time range",
+        )
 
-# volume trace
-hist['diff'] = hist['Close'] - hist['Open']
-hist.loc[hist['diff'] >= 0, 'color'] = 'green'
-hist.loc[hist['diff'] < 0, 'color'] = 'red'
-mainChart.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker={
-                    'color': hist['color']}), secondary_y=True)
-# descales volume
-mainChart.update_yaxes(range=[0, 5000000000], secondary_y=True)
-mainChart.update_yaxes(visible=False, secondary_y=True)
+    ])
+])
 
-# MA20 trace
-mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
-    window=20).mean(), marker_color='blue', name='20 Day MA'))
 
-startDateVar = input("What start date do you want to  view from: \n")
-# set x-axis initial to show scoped portions
-if not startDateVar == "max":
-    start_date = hist.index[timeFunc(startDateVar)]
+@app.callback(
+    Output('mainChart', 'figure'),
+    Input('time-range', 'value')
+)
+def update_chart(selected_time_range):
+    if not selected_time_range:
+        selected_time_range = 'ytd'
+    # symbol = yf.Ticker(input("Enter a Ticker"))
+    symbol = yf.Ticker('TSLA')
+    hist = symbol.history(period='max')
+    # plotly -> create
+    mainChart = make_subplots(specs=[[{"secondary_y": True}]])
+    # Candlestick main trace
+    mainChart.add_trace(go.Candlestick(x=hist.index,
+                                       open=hist['Open'],
+                                       high=hist['High'],
+                                       low=hist['Low'],
+                                       close=hist['Close']))
+
+    # volume trace
+    hist['diff'] = hist['Close'] - hist['Open']
+    hist['color'] = 'red'  # Initialize 'color' column with 'red'
+    hist.loc[hist['diff'] >= 0, 'color'] = 'green'
+    mainChart.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker={
+                        'color': hist['color']}), secondary_y=True)
+    # descales volume
+    mainChart.update_yaxes(range=[0, 5000000000], secondary_y=True)
+    mainChart.update_yaxes(visible=False, secondary_y=True)
+
+    # MA20 trace
+    mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
+        window=20).mean(), marker_color='blue', name='20 Day MA'))
+
+    # update x-axis range
+    start_date = hist.index[timeFunc(selected_time_range)]
     end_date = hist.index[-1]
+    # Set x-axis initial range
     mainChart.update_xaxes(range=[start_date, end_date])
 
-# rangeslider tekkkkk
-mainChart.update_layout(xaxis_rangeslider_visible=True)
+    # rangeslider tekkkkk
+    mainChart.update_layout(xaxis_rangeslider_visible=True)
 
-# update title
-mainChart.update_layout(title={'text': symbol.info["symbol"], 'x': 0.5})
+    # update title
+    mainChart.update_layout(title={'text': symbol.info["symbol"], 'x': 0.5})
 
-# show chart
-mainChart.show()
+    # show chart
+    return mainChart
+
+
+if __name__ == '__main__':
+    app.run_server(debug=True)
