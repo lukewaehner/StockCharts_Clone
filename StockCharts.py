@@ -10,7 +10,9 @@ import pandas as pd
 import datetime
 import pickle
 
-app = dash.Dash(__name__)
+external_stylesheets = ['styles.css']
+
+app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
 
 
 def timeFunc(selected_time_range):
@@ -67,35 +69,47 @@ def timeFunc(selected_time_range):
 app.layout = html.Div([
     html.Div([
         dcc.Graph(id='mainChart'),
-        dcc.Dropdown(
-            id='time-range',
-            options=[
-                {'label': '1 Month', 'value': 'month'},
-                {'label': '3 Months', 'value': '3 months'},
-                {'label': '6 Months', 'value': '6 months'},
-                {'label': '1 Year', 'value': 'year'},
-                {'label': '2 Years', 'value': '2 years'},
-                {'label': '5 Years', 'value': '5 years'},
-                {'label': '10 Years', 'value': '10 years'},
-                {'label': 'YTD', 'value': 'ytd'},
-                {'label': 'max', 'value': 'max'},
-            ],
-            placeholder="Select a time range",
-        )
+    ], style={'borderRadius': '10px', 'border': '2px solid #ccc', 'padding': '20px', 'margin': '20px'}),
 
-    ])
-])
+    html.Div([
+        html.Div([
+            dcc.Dropdown(
+                id='time-range',
+                options=[
+                    {'label': '1 Month', 'value': 'month'},
+                    {'label': '3 Months', 'value': '3 months'},
+                    {'label': '6 Months', 'value': '6 months'},
+                    {'label': '1 Year', 'value': 'year'},
+                    {'label': '2 Years', 'value': '2 years'},
+                    {'label': '5 Years', 'value': '5 years'},
+                    {'label': '10 Years', 'value': '10 years'},
+                    {'label': 'YTD', 'value': 'ytd'},
+                    {'label': 'max', 'value': 'max'},
+                ],
+                placeholder="Select a time range",
+                style={'width': '100%'},
+            )
+        ], style={'width': '50%'}),
+
+        html.Div([
+            dcc.Input(id='stock-symbol', type='text',
+                      placeholder='Enter a Stock Ticker Symbol', style={'width': '50%'},)
+        ], style={'width': '50%'})
+    ], style={'display': 'flex', 'gap': '20px', 'margin-left': '35px'}),
+], style={'display': 'flex', 'flex-direction': 'column'})
 
 
 @app.callback(
     Output('mainChart', 'figure'),
-    Input('time-range', 'value')
+    Input('time-range', 'value'),
+    Input('stock-symbol', 'value'),  # Add this line for the stock symbol input
 )
-def update_chart(selected_time_range):
+def update_chart(selected_time_range, selected_stock_symbol):
     if not selected_time_range:
         selected_time_range = 'ytd'
-    # symbol = yf.Ticker(input("Enter a Ticker"))
-    symbol = yf.Ticker('TSLA')
+    if not selected_stock_symbol:
+        selected_stock_symbol = 'DJIA'
+    symbol = yf.Ticker(selected_stock_symbol)
     hist = symbol.history(period='max')
     # plotly -> create
     mainChart = make_subplots(specs=[[{"secondary_y": True}]])
@@ -127,7 +141,7 @@ def update_chart(selected_time_range):
     mainChart.update_xaxes(range=[start_date, end_date])
 
     # rangeslider tekkkkk
-    mainChart.update_layout(xaxis_rangeslider_visible=True)
+    mainChart.update_layout(xaxis_rangeslider_visible=False)
 
     # update title
     mainChart.update_layout(title={'text': symbol.info["symbol"], 'x': 0.5})
