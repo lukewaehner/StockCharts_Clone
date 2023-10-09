@@ -4,94 +4,60 @@ from plotly.subplots import make_subplots
 import datetime
 import pickle
 
-# define symbol and vars
 
-# get vars
-with open('ytdCall.pkl', 'rb') as file:
-    ytdCall = pickle.load(file)
-with open('lastDate.pkl', 'rb') as file:
-    lastDate = pickle.load(file)
+def timeFunc(str):
+    ranges = {'day': 2,
+              'week': 5,
+              'month': 30,
+              'quarter': 90,
+              '3 months': 90,
+              'half year': 180,
+              '6 months': 180,
+              '1 year': 365,
+              'year': 365,
+              '2 years': 730,
+              '5 years': 1826,
+              '10 years': 3652,
+              'year to date': 'ytd',
+              'ytd': 'ytd',
+              'max': 'max'
+              }
+    today = datetime.date.today()
+    inputChange = []
+    with open('lastDate.pkl', 'rb') as file:
+        lastDate = pickle.load(file)
+    # ytd call
+    if 'ytd' == ranges[str]:
+        with open('ytdCall.pkl', 'rb') as file:
+            ytdCall = pickle.load(file)
+        while not 0 == ((today-lastDate).days):
+            lastDate = lastDate + datetime.timedelta(days=1)
+            if lastDate.weekday() < 5:
+                print("appended:", lastDate)
+                inputChange.append(lastDate)
+        with open('lastDate.pkl', 'wb') as file:
+            print("lastDate", lastDate)
+            pickle.dump(lastDate, file)
+        ytdCall = ytdCall - len(inputChange)
+        with open('ytdCall.pkl', 'wb') as file:
+            pickle.dump(ytdCall, file)
+        return ytdCall
 
-today = datetime.date.today()
-# testvars
-lastDate = today  # - (datetime.timedelta(days=1))
-changeDays = datetime.timedelta(days=2)
-# today = today + changeDays
-ytdCall = -192
-
-print(ytdCall, today, lastDate)
-year1, week_number1, weekday1 = today.isocalendar()
-year2, week_number2, weekday2 = lastDate.isocalendar()
-print("Week print: ", week_number1, week_number2)
-print("Day print:", weekday1, weekday2)
-print("Today-lastday:", (today-lastDate).days)
-if weekday1 < 6:
-    # logging on a weekday of the next week
-    if week_number1 > week_number2:
-        if weekday2 == 6:
-            week_number2 += 1
-            inputChange = (ytdCall - ((today-lastDate).days)) + \
-                ((week_number1 - week_number2)*2) + 1
-        elif weekday2 == 7:
-            week_number2 += 1
-            inputChange = ytdCall - \
-                (today-lastDate).days + ((week_number1 - week_number2)*2)
-        else:
-            inputChange = ytdCall - \
-                (today-lastDate).days + ((week_number1 - week_number2)*2)
-        print(inputChange)
+    # normal return
     else:
-        # standard logging on a weekday of same week
-        inputChange = ytdCall - (today-lastDate).days
-        print("2nd toggle")
-else:
-    # logging on a weekend day of the next week
-    if week_number1 > week_number2:
-        print("3rd toggle")
-        print((today-lastDate).days)
-        print(((week_number1 - week_number2-1)*2))
-        inputChange = ytdCall - (today-lastDate).days + \
-            ((week_number1 - week_number2-1)*2) - (weekday1-4)
-        print(inputChange)
-    else:
-        # logging on a weekend day of the same week
-        print("4th toggle")
-        print((today-lastDate).days)
-        print(weekday1-4)
-        inputChange = ytdCall - (today-lastDate).days + (weekday1-4)
-        print(inputChange)
-if not lastDate == today:
-    print("Update toggle")
-    lastDate = today
-    ytdCall = inputChange
-# dump vars
-print(ytdCall, today, lastDate)
-with open('lastDate.pkl', 'wb') as file:
-    pickle.dump(lastDate, file)
-with open('ytdCall.pkl', 'wb') as file:
-    pickle.dump(ytdCall, file)
-ranges = {'day': 2,
-          'week': 5,
-          'month': 30,
-          'quarter': 90,
-          '3 months': 90,
-          'half year': 120,
-          '6 months': 120,
-          '1 year': 365,
-          'year': 365,
-          '2 years': 730,
-          '5 years': 1826,
-          '10 years': 3652,
-          'year to date': ytdCall,
-          'ytd': ytdCall,
-          'max': 'max'
-          }
-dictDate = ranges[input("What start date do you want to  view from: \n")]
+        loggedDays = ranges[str]
+        while loggedDays > -1:
+            inputChange.append(today)
+            if today.weekday() > 4:
+                inputChange.pop()
+            today = today - datetime.timedelta(days=1)
+            loggedDays -= 1
+        return (-1 * len(inputChange))
+
 
 # symbol = yf.Ticker(input("Enter a Ticker"))
 symbol = yf.Ticker('TSLA')
 hist = symbol.history(period='max')
-print(hist.index[-192])
 # plotly -> create
 mainChart = make_subplots(specs=[[{"secondary_y": True}]])
 # Candlestick main trace
@@ -115,10 +81,10 @@ mainChart.update_yaxes(visible=False, secondary_y=True)
 mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
     window=20).mean(), marker_color='blue', name='20 Day MA'))
 
+startDateVar = input("What start date do you want to  view from: \n")
 # set x-axis initial to show scoped portions
-if not dictDate == "max":
-    # start_date = hist.index[-1 * dictDate]
-    start_date = hist.index[dictDate]
+if not startDateVar == "max":
+    start_date = hist.index[timeFunc(startDateVar)]
     end_date = hist.index[-1]
     mainChart.update_xaxes(range=[start_date, end_date])
 
