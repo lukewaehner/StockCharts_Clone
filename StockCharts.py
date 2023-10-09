@@ -4,92 +4,129 @@ from plotly.subplots import make_subplots
 import datetime
 import pickle
 
-#define symbol and vars
+# define symbol and vars
 
-#get vars
+# get vars
 with open('ytdCall.pkl', 'rb') as file:
-        ytdCall = pickle.load(file)
+    ytdCall = pickle.load(file)
 with open('lastDate.pkl', 'rb') as file:
-        lastDate = pickle.load(file)
+    lastDate = pickle.load(file)
 
 today = datetime.date.today()
+# testvars
+lastDate = today  # - (datetime.timedelta(days=1))
+changeDays = datetime.timedelta(days=2)
+# today = today + changeDays
+ytdCall = -192
+
+print(ytdCall, today, lastDate)
 year1, week_number1, weekday1 = today.isocalendar()
 year2, week_number2, weekday2 = lastDate.isocalendar()
-
-if weekday1 < 5:
-       if week_number1 > week_number2:
-                inputChange = ytdCall - (today-lastDate).days + ((week_number1 - week_number2)*2)
-       else:
-                inputChange = ytdCall - (today-lastDate).days #calculates the number of days to change
+print("Week print: ", week_number1, week_number2)
+print("Day print:", weekday1, weekday2)
+print("Today-lastday:", (today-lastDate).days)
+if weekday1 < 6:
+    # logging on a weekday of the next week
+    if week_number1 > week_number2:
+        if weekday2 == 6:
+            week_number2 += 1
+            inputChange = (ytdCall - ((today-lastDate).days)) + \
+                ((week_number1 - week_number2)*2) + 1
+        elif weekday2 == 7:
+            week_number2 += 1
+            inputChange = ytdCall - \
+                (today-lastDate).days + ((week_number1 - week_number2)*2)
+        else:
+            inputChange = ytdCall - \
+                (today-lastDate).days + ((week_number1 - week_number2)*2)
+        print(inputChange)
+    else:
+        # standard logging on a weekday of same week
+        inputChange = ytdCall - (today-lastDate).days
+        print("2nd toggle")
 else:
-        if week_number1 > week_number2:
-         inputChange = ytdCall - (today-lastDate).days + ((week_number1 - week_number2-1)*2) - (weekday1-4)
-        else:   
-         inputChange = ytdCall - (today-lastDate).days - (weekday1-4) #calculates the number of days to change
+    # logging on a weekend day of the next week
+    if week_number1 > week_number2:
+        print("3rd toggle")
+        print((today-lastDate).days)
+        print(((week_number1 - week_number2-1)*2))
+        inputChange = ytdCall - (today-lastDate).days + \
+            ((week_number1 - week_number2-1)*2) - (weekday1-4)
+        print(inputChange)
+    else:
+        # logging on a weekend day of the same week
+        print("4th toggle")
+        print((today-lastDate).days)
+        print(weekday1-4)
+        inputChange = ytdCall - (today-lastDate).days + (weekday1-4)
+        print(inputChange)
 if not lastDate == today:
-                lastDate += today - lastDate
-                ytdCall = inputChange
-#dump vars
+    print("Update toggle")
+    lastDate = today
+    ytdCall = inputChange
+# dump vars
+print(ytdCall, today, lastDate)
 with open('lastDate.pkl', 'wb') as file:
-        pickle.dump(lastDate, file)
+    pickle.dump(lastDate, file)
 with open('ytdCall.pkl', 'wb') as file:
     pickle.dump(ytdCall, file)
-
 ranges = {'day': 2,
-        'week': 5,
-        'month': 30,
-        'quarter': 90,
-        '3 months': 90,
-        'half year': 120,
-        '6 months': 120,
-        '1 year': 365,
-        'year': 365,
-        '2 years': 730,
-        '5 years': 1826,
-        '10 years': 3652,
-        'year to date': ytdCall,
-        'ytd': ytdCall,
-        'max': 'max'
-                   }
+          'week': 5,
+          'month': 30,
+          'quarter': 90,
+          '3 months': 90,
+          'half year': 120,
+          '6 months': 120,
+          '1 year': 365,
+          'year': 365,
+          '2 years': 730,
+          '5 years': 1826,
+          '10 years': 3652,
+          'year to date': ytdCall,
+          'ytd': ytdCall,
+          'max': 'max'
+          }
 dictDate = ranges[input("What start date do you want to  view from: \n")]
 
-#symbol = yf.Ticker(input("Enter a Ticker"))
+# symbol = yf.Ticker(input("Enter a Ticker"))
 symbol = yf.Ticker('TSLA')
 hist = symbol.history(period='max')
 print(hist.index[-192])
-#plotly -> create
+# plotly -> create
 mainChart = make_subplots(specs=[[{"secondary_y": True}]])
-#Candlestick main trace
+# Candlestick main trace
 mainChart.add_trace(go.Candlestick(x=hist.index,
-                                open=hist['Open'],
-                                high=hist['High'],
-                                low=hist['Low'],
-                                close=hist['Close']))
+                                   open=hist['Open'],
+                                   high=hist['High'],
+                                   low=hist['Low'],
+                                   close=hist['Close']))
 
-#volume trace
+# volume trace
 hist['diff'] = hist['Close'] - hist['Open']
-hist.loc[hist['diff']>=0, 'color'] = 'green'
-hist.loc[hist['diff']<0, 'color'] = 'red'
-mainChart.add_trace(go.Bar(x=hist.index,y=hist['Volume'],name='Volume', marker={'color': hist['color']}), secondary_y=True)
-#descales volume
-mainChart.update_yaxes(range=[0,5000000000],secondary_y=True)
+hist.loc[hist['diff'] >= 0, 'color'] = 'green'
+hist.loc[hist['diff'] < 0, 'color'] = 'red'
+mainChart.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker={
+                    'color': hist['color']}), secondary_y=True)
+# descales volume
+mainChart.update_yaxes(range=[0, 5000000000], secondary_y=True)
 mainChart.update_yaxes(visible=False, secondary_y=True)
 
-#MA20 trace
-mainChart.add_trace(go.Scatter(x=hist.index,y=hist['Close'].rolling(window=20).mean(),marker_color='blue',name='20 Day MA'))
+# MA20 trace
+mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
+    window=20).mean(), marker_color='blue', name='20 Day MA'))
 
-#set x-axis initial to show scoped portions
+# set x-axis initial to show scoped portions
 if not dictDate == "max":
-        #start_date = hist.index[-1 * dictDate]
-        start_date = hist.index[dictDate]
-        end_date = hist.index[-1]
-        mainChart.update_xaxes(range=[start_date, end_date])
+    # start_date = hist.index[-1 * dictDate]
+    start_date = hist.index[dictDate]
+    end_date = hist.index[-1]
+    mainChart.update_xaxes(range=[start_date, end_date])
 
-#rangeslider tekkkkk
+# rangeslider tekkkkk
 mainChart.update_layout(xaxis_rangeslider_visible=True)
 
-#update title
-mainChart.update_layout(title={'text': symbol.info["symbol"], 'x':0.5})
+# update title
+mainChart.update_layout(title={'text': symbol.info["symbol"], 'x': 0.5})
 
-#show chart
+# show chart
 mainChart.show()
