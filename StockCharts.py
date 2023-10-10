@@ -144,7 +144,8 @@ def update_chart(selected_time_range, selected_stock_symbol):
     mainChart.update_layout(xaxis_rangeslider_visible=False)
 
     # update title
-    mainChart.update_layout(title={'text': symbol.info["symbol"], 'x': 0.5})
+    mainChart.update_layout(
+        title={'text': symbol.info["symbol"], 'x': 0.5})
 
     # show chart
     return mainChart
