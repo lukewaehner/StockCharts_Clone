@@ -129,25 +129,33 @@ body {
 .section1images {
   margin: 0px 17.5%;
   display: flex;
-  justify-content: center;
+  justify-content: space-around;
   text-align: center;
   gap: 20px;
 }
-
+.imgpair {
+  width: 25%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 .imgpair > img {
-  width: 125px;
+  width: 125;
   height: auto;
   border: 2px;
   border-style: solid;
-  border-radius: 100%;
+  border-radius: 25%;
   max-width: 100%;
 }
 .imgpair > p {
   margin: 0;
   padding-top: 5px;
-  width: inherit;
   color: gray;
   font-size: 14px;
+}
+.img1 {
+  padding: 25px;
+  padding-left: 30px;
 }
 
 /* Section 2 Content */

@@ -6,9 +6,12 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import pandas as pd
+# for RSI
+import ta
 # for timeFunc
 import datetime
 import pickle
+
 
 external_stylesheets = ['styles.css']
 
@@ -135,7 +138,10 @@ def update_chart(selected_time_range, selected_stock_symbol):
         window=20).mean(), marker_color='blue', name='20 Day MA'))
 
     # update x-axis range
-    start_date = hist.index[timeFunc(selected_time_range)]
+    if len(hist.index) < abs(timeFunc(selected_time_range)):
+        start_date = hist.index[timeFunc('max')]
+    else:
+        start_date = hist.index[timeFunc(selected_time_range)]
     end_date = hist.index[-1]
     # Set x-axis initial range
     mainChart.update_xaxes(range=[start_date, end_date])
