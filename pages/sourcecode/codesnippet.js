@@ -1,3 +1,4 @@
+var codeSnippet = `
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -161,3 +162,8 @@ def update_chart(selected_time_range, selected_stock_symbol):
 
 if __name__ == '__main__':
     app.run_server(debug=True)
+`;
+
+// Select the <pre> element and add the code
+var codeElement = document.getElementById("sourcecode");
+codeElement.textContent = codeSnippet;

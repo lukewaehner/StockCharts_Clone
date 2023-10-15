@@ -1,0 +1,12 @@
+body {
+  background-color: #1f2937;
+}
+.codesnippet {
+  display: flex;
+  justify-content: center;
+}
+
+#sourcecode {
+  background-color: #e5e7eb;
+  padding: 24px;
+}
