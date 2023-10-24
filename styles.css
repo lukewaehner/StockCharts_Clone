@@ -68,8 +68,8 @@ body {
 /* First Part */
 .HERO {
   background-color: #1f2937;
-  padding-left: 16%;
-  padding-right: 16%;
+  padding-left: 12%;
+  padding-right: 12%;
 }
 /* very top bar */
 .header {
@@ -105,6 +105,8 @@ body {
 }
 
 .imageplaceholder {
+  border: 3px;
+  border-style: solid;
   flex: 2;
   display: flex;
   background-color: #6d747e;

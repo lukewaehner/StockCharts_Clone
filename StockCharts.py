@@ -6,8 +6,6 @@ import dash
 from dash import dcc, html
 from dash.dependencies import Input, Output
 import pandas as pd
-# for RSI
-import ta
 # for timeFunc
 import datetime
 import pickle
@@ -71,10 +69,30 @@ def timeFunc(selected_time_range):
         return (-1 * len(inputChange))
 
 
+def calculate_rsi(data, period=14):
+    # Calculate price changes
+    delta = data['Close'].diff(1)
+
+    # Gain and loss for each period
+    gain = delta.where(delta > 0, 0)
+    loss = -delta.where(delta < 0, 0)
+
+    # Calculate the average gain and average loss over the specified period
+    avg_gain = gain.rolling(window=period, min_periods=1).mean()
+    avg_loss = loss.rolling(window=period, min_periods=1).mean()
+
+    # Calculate relative strength (RS)
+    rs = avg_gain / avg_loss
+
+    # Calculate the RSI
+    rsi = 100 - (100 / (1 + rs))
+    return rsi
+
+
 app.layout = html.Div([
     html.Div([
         dcc.Graph(id='mainChart'),
-    ], style={'borderRadius': '10px', 'border': '2px solid #ccc', 'padding': '20px', 'margin': '20px'}),
+    ], style={'borderRadius': '10px', 'border': '2px solid #ccc'}),
 
     html.Div([
         html.Div([
@@ -98,10 +116,10 @@ app.layout = html.Div([
 
         html.Div([
             dcc.Input(id='stock-symbol', type='text',
-                      placeholder='Enter a Stock Ticker Symbol', style={'width': '50%'},)
+                      placeholder='Enter a Stock Ticker Symbol', style={'width': '70%'},)
         ], style={'width': '50%'})
-    ], style={'display': 'flex', 'gap': '20px', 'margin-left': '35px'}),
-], style={'display': 'flex', 'flex-direction': 'column'})
+    ], style={'display': 'flex', 'margin-left': '35px'}),
+], style={'display': 'flex', 'flex-direction': 'column', 'width': '100%', 'height': '100%'})
 
 
 @app.callback(
@@ -113,48 +131,66 @@ def update_chart(selected_time_range, selected_stock_symbol):
     if not selected_time_range:
         selected_time_range = 'ytd'
     if not selected_stock_symbol:
-        selected_stock_symbol = 'DJIA'
+        selected_stock_symbol = '^DJA'
     symbol = yf.Ticker(selected_stock_symbol)
     hist = symbol.history(period='max')
     # plotly -> create
-    mainChart = make_subplots(specs=[[{"secondary_y": True}]])
+    mainChart = make_subplots(rows=2, cols=1, shared_xaxes=True,
+                              row_heights=[0.3, 0.7], vertical_spacing=0.02, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
+    # <------------------------ Bottom Chart ------------------------>
     # Candlestick main trace
     mainChart.add_trace(go.Candlestick(x=hist.index,
                                        open=hist['Open'],
                                        high=hist['High'],
                                        low=hist['Low'],
-                                       close=hist['Close']))
+                                       close=hist['Close']), row=2, col=1)
 
     # volume trace
     hist['diff'] = hist['Close'] - hist['Open']
     hist['color'] = 'red'  # Initialize 'color' column with 'red'
     hist.loc[hist['diff'] >= 0, 'color'] = 'green'
     mainChart.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker={
-                        'color': hist['color']}), secondary_y=True)
-    # descales volume
-    mainChart.update_yaxes(range=[0, 5000000000], secondary_y=True)
-    mainChart.update_yaxes(visible=False, secondary_y=True)
-
+                        'color': hist['color']}), secondary_y=True, row=2, col=1)
     # MA20 trace
     mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
-        window=20).mean(), marker_color='blue', name='20 Day MA'))
-
+        window=20).mean(), marker_color='blue', name='20 Day MA'), row=2, col=1)
     # update x-axis range
     if len(hist.index) < abs(timeFunc(selected_time_range)):
         start_date = hist.index[timeFunc('max')]
     else:
         start_date = hist.index[timeFunc(selected_time_range)]
     end_date = hist.index[-1]
+    # filter the data
+    filtered_data = hist[(hist.index >= start_date) & (hist.index <= end_date)]
+    start_date = filtered_data.index[0]
+    end_date = filtered_data.index[-1]
     # Set x-axis initial range
-    mainChart.update_xaxes(range=[start_date, end_date])
+    mainChart.update_xaxes(range=[start_date, end_date], type='category', ticktext=filtered_data.index.strftime(
+        '%b-%y'), tickvals=filtered_data.index, row=2, col=1)
+    # Set y-axis range
+    # Calculate the minimum and maximum values for the Y-axis
+    offsetPercentage = max(hist['Close']) * 0.01
+    min_y = min(filtered_data['Low']) - offsetPercentage
+    max_y = max(filtered_data['High']) + offsetPercentage
+    mainChart.update_yaxes(range=[min_y, max_y],
+                           secondary_y=False, row=2, col=1)
+    # descale volume to percentage of y axis (8%)
+    avgVol = sum(filtered_data['Volume']) / len(filtered_data['Volume'])
+    VolumePercentageMaximizer = avgVol / 0.08
+    mainChart.update_yaxes(
+        range=[0, VolumePercentageMaximizer], secondary_y=True, row=2, col=1)
 
-    # rangeslider tekkkkk
-    mainChart.update_layout(xaxis_rangeslider_visible=False)
+    # <------------------------ Top Chart ------------------------>
+    # RSI trace
+    rsi = calculate_rsi(filtered_data)
+    mainChart.add_trace(go.Scatter(
+        x=rsi.index, y=rsi, marker_color='purple', name='RSI'), row=1, col=1)
 
     # update title
     mainChart.update_layout(
-        title={'text': symbol.info["symbol"], 'x': 0.5})
-
+        title={'text': symbol.info["symbol"], 'x': 0.5},
+        xaxis_rangeslider_visible=False,
+        xaxis2_rangeslider_visible=False)
     # show chart
     return mainChart
 
