@@ -139,6 +139,7 @@ def update_chart(selected_time_range, selected_stock_symbol):
                               row_heights=[0.3, 0.7], vertical_spacing=0.02, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
     # <------------------------ Bottom Chart ------------------------>
     # Candlestick main trace
+    print(hist.index)
     mainChart.add_trace(go.Candlestick(x=hist.index,
                                        open=hist['Open'],
                                        high=hist['High'],
@@ -153,23 +154,26 @@ def update_chart(selected_time_range, selected_stock_symbol):
                         'color': hist['color']}), secondary_y=True, row=2, col=1)
     # MA20 trace
     mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
-        window=20).mean(), marker_color='blue', name='20 Day MA'), row=2, col=1)
+        window=365).mean(), marker_color='blue', name='365 Day MA'), row=2, col=1)
     # update x-axis range
     if len(hist.index) < abs(timeFunc(selected_time_range)):
         start_date = hist.index[timeFunc('max')]
     else:
         start_date = hist.index[timeFunc(selected_time_range)]
     end_date = hist.index[-1]
+
     # filter the data
     filtered_data = hist[(hist.index >= start_date) & (hist.index <= end_date)]
+
     start_date = filtered_data.index[0]
     end_date = filtered_data.index[-1]
     # Set x-axis initial range
-    mainChart.update_xaxes(range=[start_date, end_date], type='category', ticktext=filtered_data.index.strftime(
-        '%b-%y'), tickvals=filtered_data.index, row=2, col=1)
+    mainChart.update_xaxes(range=[start_date, end_date], type='date', ticktext=filtered_data.index.strftime(
+        '%b-%y'), tickvals=filtered_data.index, tickmode='auto',  # Set to 'auto' or 'linear' based on your preference
+        nticks=10, row=2, col=1)
     # Set y-axis range
     # Calculate the minimum and maximum values for the Y-axis
-    offsetPercentage = max(hist['Close']) * 0.01
+    offsetPercentage = max(hist['Close']) * 0.00  # 1
     min_y = min(filtered_data['Low']) - offsetPercentage
     max_y = max(filtered_data['High']) + offsetPercentage
     mainChart.update_yaxes(range=[min_y, max_y],
