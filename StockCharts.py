@@ -89,12 +89,21 @@ def calculate_rsi(data, period=14):
     return rsi
 
 
-app.layout = html.Div([
-    html.Div([
-        dcc.Graph(id='mainChart'),
-    ], style={'borderRadius': '10px', 'border': '2px solid #ccc'}),
+color_1 = '#CFD6EA'
+color_2 = '#B0B2B8'
+color_3 = '#7D7E75'
+color_4 = '#4F5D2f'
+color_5 = '#423629'
 
+app.layout = html.Div([
+    # Main chart and controls container
     html.Div([
+        # Main chart container
+        html.Div([
+            dcc.Graph(id='mainChart'),
+        ], style={'borderRadius': '10px', 'border': f'2px solid {color_4}', 'padding': '10px', 'backgroundColor': color_1, 'width': '65vw'}),
+
+        # Dropdown and input container
         html.Div([
             dcc.Dropdown(
                 id='time-range',
@@ -110,16 +119,23 @@ app.layout = html.Div([
                     {'label': 'max', 'value': 'max'},
                 ],
                 placeholder="Select a time range",
-                style={'width': '100%'},
-            )
-        ], style={'width': '50%'}),
 
-        html.Div([
-            dcc.Input(id='stock-symbol', type='text',
-                      placeholder='Enter a Stock Ticker Symbol', style={'width': '70%'},)
-        ], style={'width': '50%'})
-    ], style={'display': 'flex', 'margin-left': '35px'}),
-], style={'display': 'flex', 'flex-direction': 'column', 'width': '100%', 'height': '100%'})
+                style={'width': '250px', 'borderRadius': '10px',
+                       'border': f'1px solid {color_2}'}
+            ),
+            dcc.Input(
+                id='stock-symbol',
+                type='text',
+                placeholder='Enter a Stock Ticker Symbol',
+                # Input properties...
+                style={'width': '250px', 'display': 'block', 'padding': '10px',
+                       'textAlign': 'center', "border": f'1px solid {color_2}', 'borderRadius': '10px'}
+            ),
+        ], style={'padding': '10px', 'backgroundColor': color_3, 'textAlign': 'center', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '50px', 'border': f'2px solid {color_5}', 'borderRadius': '10px', 'flexWrap': 'wrap'}),
+    ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '20px', 'margin': 'auto', 'width': '90%'}),  # Style for centering
+], style={'display': 'flex', 'flexDirection': 'column', 'width': '80vw', 'height': '100vh', 'backgroundColor': color_2, 'justifyContent': 'center',
+          'position': 'fixed', 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)',
+          'borderRadius': '10px', 'boxShadow': '0px 0px 10px 5px rgba(255,255,255,0.75)'})
 
 
 @app.callback(
@@ -136,15 +152,16 @@ def update_chart(selected_time_range, selected_stock_symbol):
     hist = symbol.history(period='max')
     # plotly -> create
     mainChart = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                              row_heights=[0.3, 0.7], vertical_spacing=0.02, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
+                              row_heights=[0.3, 0.7], vertical_spacing=0.1, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
     # <------------------------ Bottom Chart ------------------------>
     # Candlestick main trace
-    print(hist.index)
+    # print(hist.index)
     mainChart.add_trace(go.Candlestick(x=hist.index,
                                        open=hist['Open'],
                                        high=hist['High'],
                                        low=hist['Low'],
-                                       close=hist['Close']), row=2, col=1)
+                                       close=hist['Close'],
+                                       name='Price'), row=2, col=1)
 
     # volume trace
     hist['diff'] = hist['Close'] - hist['Open']
@@ -154,7 +171,7 @@ def update_chart(selected_time_range, selected_stock_symbol):
                         'color': hist['color']}), secondary_y=True, row=2, col=1)
     # MA20 trace
     mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
-        window=365).mean(), marker_color='blue', name='365 Day MA'), row=2, col=1)
+        window=30).mean(), marker_color='blue', name='30 Day MA'), row=2, col=1)
     # update x-axis range
     if len(hist.index) < abs(timeFunc(selected_time_range)):
         start_date = hist.index[timeFunc('max')]
@@ -194,7 +211,21 @@ def update_chart(selected_time_range, selected_stock_symbol):
     mainChart.update_layout(
         title={'text': symbol.info["symbol"], 'x': 0.5},
         xaxis_rangeslider_visible=False,
-        xaxis2_rangeslider_visible=False)
+        xaxis2_rangeslider_visible=False,
+        plot_bgcolor='#ACCBE1',
+        paper_bgcolor='#FFF',
+        margin=dict(l=100, r=100, t=100, b=100, pad=10),
+        showlegend=False,
+    )
+    mainChart.update_yaxes(
+        showgrid=False,
+        gridcolor='white',
+        gridwidth=1,
+        secondary_y=False,
+        row=2,
+        col=1
+    )
+
     # show chart
     return mainChart
 
