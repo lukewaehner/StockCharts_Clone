@@ -231,4 +231,4 @@ def update_chart(selected_time_range, selected_stock_symbol):
 
 
 if __name__ == '__main__':
-    app.run_server(debug=True)
+    app.run_server(debug=False)
