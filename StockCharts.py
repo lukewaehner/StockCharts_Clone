@@ -1,3 +1,7 @@
+import sys
+import os
+import webbrowser
+# for chart
 import yfinance as yf
 import plotly.graph_objects as go
 from plotly.subplots import make_subplots
@@ -8,12 +12,27 @@ from dash.dependencies import Input, Output
 import pandas as pd
 # for timeFunc
 import datetime
+from datetime import timedelta
 import pickle
 
-# stylesheet rel
-external_stylesheets = ['styles.css']
 
-app = dash.Dash(__name__, external_stylesheets=external_stylesheets)
+def resource_path(relative_path):
+    try:
+        # PyInstaller creates a temp folder and stores path in _MEIPASS
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+html_file = resource_path('index2.html')
+webbrowser.open('file://' + html_file)
+
+css_file = [resource_path('style.css')]
+# stylesheet rel
+
+app = dash.Dash(__name__, external_stylesheets=css_file)
 
 # function to create specific list indexs to call the correct start date
 
@@ -36,23 +55,15 @@ def timeFunc(selected_time_range):
               'max': 'max'
               }
     today = datetime.date.today()
-    inputChange = []
-    with open('variables/lastDate.pkl', 'rb') as file:
-        lastDate = pickle.load(file)
+    weekday_count = 0
     # ytd call
     if 'ytd' == selected_time_range or 'ytd' == ranges[selected_time_range]:
-        with open('variables/ytdCall.pkl', 'rb') as file:
-            ytdCall = pickle.load(file)
-        while not 0 == ((today-lastDate).days):
-            lastDate = lastDate + datetime.timedelta(days=1)
-            if lastDate.weekday() < 5:
-                inputChange.append(lastDate)
-        with open('variables/lastDate.pkl', 'wb') as file:
-            pickle.dump(lastDate, file)
-        ytdCall = ytdCall - len(inputChange)
-        with open('variables/ytdCall.pkl', 'wb') as file:
-            pickle.dump(ytdCall, file)
-        return ytdCall
+        startOfYear = datetime.date(today.year, 1, 3)
+        for single_date in (startOfYear + timedelta(days=n) for n in range((today - startOfYear).days + 1)):
+            # If the day is a weekday (Monday=0, Sunday=6), increment the count
+            if single_date.weekday() < 5:  # 0-4 corresponds to Monday-Friday
+                weekday_count += 1
+        return (-1 * weekday_count)
 
     # normal return
     else:
@@ -61,12 +72,11 @@ def timeFunc(selected_time_range):
             return 0
         loggedDays = int(loggedDays)
         while loggedDays > -1:
-            inputChange.append(today)
-            if today.weekday() > 4:
-                inputChange.pop()
+            if today.weekday() < 5:
+                weekday_count += 1
             today = today - datetime.timedelta(days=1)
             loggedDays -= 1
-        return (-1 * len(inputChange))
+        return (-1 * weekday_count)
 
 
 def calculate_rsi(data, period=14):
@@ -101,8 +111,7 @@ app.layout = html.Div([
         # Main chart container
         html.Div([
             dcc.Graph(id='mainChart'),
-        ], style={'borderRadius': '10px', 'border': f'2px solid {color_4}', 'padding': '10px', 'backgroundColor': color_1, 'width': '65vw'}),
-
+        ], style={'borderRadius': '10px', 'border': f'2px solid {color_4}', 'padding': '10px', 'backgroundColor': color_1, 'width': '65vw', "align-self": "center", 'margin': 'auto', "margin-top": "0", "margin-bottom": "0"}),
         # Dropdown and input container
         html.Div([
             dcc.Dropdown(
@@ -131,11 +140,13 @@ app.layout = html.Div([
                 style={'width': '250px', 'display': 'block', 'padding': '10px',
                        'textAlign': 'center', "border": f'1px solid {color_2}', 'borderRadius': '10px'}
             ),
-        ], style={'padding': '10px', 'backgroundColor': color_3, 'textAlign': 'center', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '50px', 'border': f'2px solid {color_5}', 'borderRadius': '10px', 'flexWrap': 'wrap'}),
-    ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '20px', 'margin': 'auto', 'width': '90%'}),  # Style for centering
-], style={'display': 'flex', 'flexDirection': 'column', 'width': '80vw', 'height': '100vh', 'backgroundColor': color_2, 'justifyContent': 'center',
+        ], style={'padding': '10px', 'backgroundColor': color_3, 'textAlign': 'center', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '50px', 'border': f'2px solid {color_5}', 'borderRadius': '10px', "margin-top": "0", "margin-bottom": "0"}),
+        # Style for centering
+    ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start',  'gap': '20px', 'margin': 'auto', 'width': '90%', "margin-top": "50px", "margin-bottom": "0"}),
+
+], style={'display': 'flex', 'flexDirection': 'column', 'width': '80vw', 'height': '100vh', 'backgroundColor': color_2, 'justifyContent': 'flex-start',
           'position': 'fixed', 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)',
-          'borderRadius': '10px', 'boxShadow': '0px 0px 10px 5px rgba(255,255,255,0.75)'})
+          'borderRadius': '10px', 'boxShadow': '0px 0px 10px 5px rgba(255,255,255,0.75)', "margin-top": "0", "margin-bottom": "0"})
 
 
 @app.callback(
@@ -155,7 +166,6 @@ def update_chart(selected_time_range, selected_stock_symbol):
                               row_heights=[0.3, 0.7], vertical_spacing=0.1, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
     # <------------------------ Bottom Chart ------------------------>
     # Candlestick main trace
-    # print(hist.index)
     mainChart.add_trace(go.Candlestick(x=hist.index,
                                        open=hist['Open'],
                                        high=hist['High'],
@@ -186,7 +196,8 @@ def update_chart(selected_time_range, selected_stock_symbol):
     end_date = filtered_data.index[-1]
     # Set x-axis initial range
     mainChart.update_xaxes(range=[start_date, end_date], type='date', ticktext=filtered_data.index.strftime(
-        '%b-%y'), tickvals=filtered_data.index, tickmode='auto',  # Set to 'auto' or 'linear' based on your preference
+        # Set to 'auto' or 'linear' based on your preference
+        '%b-%y'), tickvals=filtered_data.index, tickmode='auto',
         nticks=10, row=2, col=1)
     # Set y-axis range
     # Calculate the minimum and maximum values for the Y-axis
