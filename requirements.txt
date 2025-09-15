@@ -1,0 +1,23 @@
+# StockCharts Pro - Requirements
+# Core dependencies for the stock charting application
+
+# Data fetching and processing
+yfinance>=0.2.20
+pandas>=2.0.0
+numpy>=1.24.0
+
+# Web framework and visualization
+dash>=2.14.0
+plotly>=5.15.0
+
+# Additional utilities
+python-dateutil>=2.8.0
+requests>=2.31.0
+
+# Optional: For better performance
+numba>=0.57.0
+
+# Development dependencies (optional)
+# pytest>=7.0.0
+# black>=23.0.0
+# flake8>=6.0.0 

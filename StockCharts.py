@@ -1,22 +1,39 @@
+#!/usr/bin/env python3
+"""
+StockCharts Pro - Professional Stock Analysis & Technical Indicators
+
+A modern, modular stock charting application built with Dash and Plotly.
+Features comprehensive technical analysis tools and real-time data.
+"""
+
 import sys
 import os
 import webbrowser
-# for chart
-import yfinance as yf
-import plotly.graph_objects as go
-from plotly.subplots import make_subplots
-# for applet
+import logging
+from pathlib import Path
+
+# Dash and Plotly imports
 import dash
-from dash import dcc, html
-from dash.dependencies import Input, Output
+from dash import dcc, html, Input, Output, State
 import pandas as pd
-# for timeFunc
-import datetime
-from datetime import timedelta
-import pickle
+
+# Local imports
+from config import COLORS, DEFAULTS, APP_CONFIG
+from utils.data_fetcher import StockDataFetcher
+from utils.time_utils import get_date_range_from_data
+from components.chart_builder import ChartBuilder
+from components.ui_components import UIComponents
+
+# Configure logging
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and for PyInstaller."""
     try:
         # PyInstaller creates a temp folder and stores path in _MEIPASS
         base_path = sys._MEIPASS
@@ -26,220 +43,199 @@ def resource_path(relative_path):
     return os.path.join(base_path, relative_path)
 
 
-html_file = resource_path('index2.html')
-webbrowser.open('file://' + html_file)
+class StockChartsApp:
+    """Main application class for StockCharts Pro."""
 
-css_file = [resource_path('style.css')]
-# stylesheet rel
+    def __init__(self):
+        self.data_fetcher = StockDataFetcher()
+        self.chart_builder = ChartBuilder()
+        self.ui_components = UIComponents()
+        self.app = self._create_app()
+        self._setup_callbacks()
 
-app = dash.Dash(__name__, external_stylesheets=css_file)
+    def _create_app(self):
+        """Create and configure the Dash application."""
+        # External stylesheets
+        external_stylesheets = self.ui_components.get_external_stylesheets()
 
-# function to create specific list indexs to call the correct start date
+        app = dash.Dash(
+            __name__,
+            external_stylesheets=external_stylesheets,
+            suppress_callback_exceptions=True,
+            title="StockCharts Pro",
+            update_title="Loading...",
+            meta_tags=[
+                {"name": "viewport", "content": "width=device-width, initial-scale=1"},
+                {"name": "description",
+                    "content": "Professional stock analysis and technical indicators"},
+            ]
+        )
+
+        # Set the layout
+        app.layout = self.ui_components.create_main_layout()
+
+        return app
+
+    def _setup_callbacks(self):
+        """Setup all Dash callbacks."""
+
+        @self.app.callback(
+            [Output('main-chart', 'figure'),
+             Output('error-display', 'children'),
+             Output('error-display', 'className'),
+             Output('loading-output', 'children')],
+            [Input('stock-symbol', 'value'),
+             Input('time-range', 'value'),
+             Input('indicators', 'value')]
+        )
+        def update_chart(stock_symbol, time_range, selected_indicators):
+            """Update the main chart based on user inputs."""
+            try:
+                # Validate inputs
+                if not stock_symbol or not stock_symbol.strip():
+                    return self._create_empty_chart(), "", "error-message", ""
+
+                stock_symbol = stock_symbol.strip().upper()
+                time_range = time_range or DEFAULTS['time_range']
+                selected_indicators = selected_indicators or []
+
+                logger.info(
+                    f"Updating chart for {stock_symbol} with time range {time_range}")
+
+                # Fetch stock data
+                hist_data, stock_info = self.data_fetcher.get_stock_data(
+                    stock_symbol)
+
+                if hist_data is None or hist_data.empty:
+                    error_msg = f"No data found for symbol '{stock_symbol}'. Please check the ticker symbol."
+                    return self._create_empty_chart(), error_msg, "error-message show", ""
+
+                # Get date range for filtering
+                start_date, end_date = get_date_range_from_data(
+                    hist_data, time_range)
+
+                if start_date is None or end_date is None:
+                    error_msg = "Unable to determine date range for the selected period."
+                    return self._create_empty_chart(), error_msg, "error-message show", ""
+
+                # Filter data for the selected time range
+                filtered_data = hist_data[
+                    (hist_data.index >= start_date) & (
+                        hist_data.index <= end_date)
+                ].copy()
+
+                if filtered_data.empty:
+                    error_msg = f"No data available for the selected time period."
+                    return self._create_empty_chart(), error_msg, "error-message show", ""
+
+                # Create the chart with selected indicators
+                figure = self._create_chart_with_indicators(
+                    hist_data, stock_info, filtered_data, selected_indicators
+                )
+
+                return figure, "", "error-message", ""
+
+            except Exception as e:
+                logger.error(f"Error updating chart: {str(e)}", exc_info=True)
+                error_msg = f"An error occurred while loading the chart: {str(e)}"
+                return self._create_empty_chart(), error_msg, "error-message show", ""
+
+    def _create_chart_with_indicators(self, hist_data, stock_info, filtered_data, selected_indicators):
+        """Create chart with selected technical indicators."""
+        # Create a modified chart builder that respects indicator selections
+        chart_builder = ChartBuilder()
+
+        # Temporarily modify the chart builder methods based on selections
+        original_methods = {}
+
+        if 'ma' not in selected_indicators:
+            original_methods['_add_moving_averages'] = chart_builder._add_moving_averages
+            chart_builder._add_moving_averages = lambda fig, data: None
+
+        if 'bb' not in selected_indicators:
+            original_methods['_add_bollinger_bands'] = chart_builder._add_bollinger_bands
+            chart_builder._add_bollinger_bands = lambda fig, data: None
+
+        if 'rsi' not in selected_indicators:
+            original_methods['_add_rsi_chart'] = chart_builder._add_rsi_chart
+            chart_builder._add_rsi_chart = lambda fig, data: None
+
+        if 'macd' not in selected_indicators:
+            original_methods['_add_macd_chart'] = chart_builder._add_macd_chart
+            chart_builder._add_macd_chart = lambda fig, data: None
+
+        # Create the chart
+        figure = chart_builder.create_main_chart(
+            hist_data, stock_info, filtered_data)
+
+        # Restore original methods
+        for method_name, method in original_methods.items():
+            setattr(chart_builder, method_name, method)
+
+        return figure
+
+    def _create_empty_chart(self):
+        """Create an empty chart for error states."""
+        import plotly.graph_objects as go
+
+        fig = go.Figure()
+        fig.update_layout(
+            title="No Data Available",
+            plot_bgcolor=COLORS['background'],
+            paper_bgcolor=COLORS['paper'],
+            height=600,
+            showlegend=False,
+            annotations=[
+                dict(
+                    text="Enter a valid stock symbol to view chart",
+                    xref="paper", yref="paper",
+                    x=0.5, y=0.5,
+                    xanchor='center', yanchor='middle',
+                    font=dict(size=16, color=COLORS['tertiary'])
+                )
+            ]
+        )
+        fig.update_xaxes(showgrid=False, showticklabels=False)
+        fig.update_yaxes(showgrid=False, showticklabels=False)
+
+        return fig
+
+    def run(self, debug=None, host=None, port=None):
+        """Run the application."""
+        debug = debug if debug is not None else APP_CONFIG['debug']
+        host = host or APP_CONFIG['host']
+        port = port or APP_CONFIG['port']
+
+        logger.info(f"Starting StockCharts Pro on http://{host}:{port}")
+
+        # Open browser automatically if not in debug mode
+        if not debug:
+            try:
+                # Try to open the HTML wrapper first
+                html_file = resource_path('index2.html')
+                if os.path.exists(html_file):
+                    webbrowser.open('file://' + html_file)
+                else:
+                    # Fallback to direct URL
+                    webbrowser.open(f'http://{host}:{port}')
+            except Exception as e:
+                logger.warning(f"Could not open browser: {e}")
+
+        # Run the server
+        self.app.run_server(debug=debug, host=host, port=port)
 
 
-def timeFunc(selected_time_range):
-    ranges = {'day': 2,
-              'week': 5,
-              'month': 30,
-              'quarter': 90,
-              '3 months': 90,
-              'half year': 180,
-              '6 months': 180,
-              '1 year': 365,
-              'year': 365,
-              '2 years': 730,
-              '5 years': 1826,
-              '10 years': 3652,
-              'year to date': 'ytd',
-              'ytd': 'ytd',
-              'max': 'max'
-              }
-    today = datetime.date.today()
-    weekday_count = 0
-    # ytd call
-    if 'ytd' == selected_time_range or 'ytd' == ranges[selected_time_range]:
-        startOfYear = datetime.date(today.year, 1, 3)
-        for single_date in (startOfYear + timedelta(days=n) for n in range((today - startOfYear).days + 1)):
-            # If the day is a weekday (Monday=0, Sunday=6), increment the count
-            if single_date.weekday() < 5:  # 0-4 corresponds to Monday-Friday
-                weekday_count += 1
-        return (-1 * weekday_count)
-
-    # normal return
-    else:
-        loggedDays = ranges.get(selected_time_range, 0)
-        if loggedDays == 'max':
-            return 0
-        loggedDays = int(loggedDays)
-        while loggedDays > -1:
-            if today.weekday() < 5:
-                weekday_count += 1
-            today = today - datetime.timedelta(days=1)
-            loggedDays -= 1
-        return (-1 * weekday_count)
-
-
-def calculate_rsi(data, period=14):
-    # Calculate price changes
-    delta = data['Close'].diff(1)
-
-    # Gain and loss for each period
-    gain = delta.where(delta > 0, 0)
-    loss = -delta.where(delta < 0, 0)
-
-    # Calculate the average gain and average loss over the specified period
-    avg_gain = gain.rolling(window=period, min_periods=1).mean()
-    avg_loss = loss.rolling(window=period, min_periods=1).mean()
-
-    # Calculate relative strength (RS)
-    rs = avg_gain / avg_loss
-
-    # Calculate the RSI
-    rsi = 100 - (100 / (1 + rs))
-    return rsi
-
-
-color_1 = '#CFD6EA'
-color_2 = '#B0B2B8'
-color_3 = '#7D7E75'
-color_4 = '#4F5D2f'
-color_5 = '#423629'
-
-app.layout = html.Div([
-    # Main chart and controls container
-    html.Div([
-        # Main chart container
-        html.Div([
-            dcc.Graph(id='mainChart'),
-        ], style={'borderRadius': '10px', 'border': f'2px solid {color_4}', 'padding': '10px', 'backgroundColor': color_1, 'width': '65vw', "align-self": "center", 'margin': 'auto', "margin-top": "0", "margin-bottom": "0"}),
-        # Dropdown and input container
-        html.Div([
-            dcc.Dropdown(
-                id='time-range',
-                options=[
-                    {'label': '1 Month', 'value': 'month'},
-                    {'label': '3 Months', 'value': '3 months'},
-                    {'label': '6 Months', 'value': '6 months'},
-                    {'label': '1 Year', 'value': 'year'},
-                    {'label': '2 Years', 'value': '2 years'},
-                    {'label': '5 Years', 'value': '5 years'},
-                    {'label': '10 Years', 'value': '10 years'},
-                    {'label': 'YTD', 'value': 'ytd'},
-                    {'label': 'max', 'value': 'max'},
-                ],
-                placeholder="Select a time range",
-
-                style={'width': '250px', 'borderRadius': '10px',
-                       'border': f'1px solid {color_2}'}
-            ),
-            dcc.Input(
-                id='stock-symbol',
-                type='text',
-                placeholder='Enter a Stock Ticker Symbol',
-                # Input properties...
-                style={'width': '250px', 'display': 'block', 'padding': '10px',
-                       'textAlign': 'center', "border": f'1px solid {color_2}', 'borderRadius': '10px'}
-            ),
-        ], style={'padding': '10px', 'backgroundColor': color_3, 'textAlign': 'center', 'display': 'flex', 'alignItems': 'center', 'justifyContent': 'center', 'gap': '50px', 'border': f'2px solid {color_5}', 'borderRadius': '10px', "margin-top": "0", "margin-bottom": "0"}),
-        # Style for centering
-    ], style={'display': 'flex', 'flexDirection': 'column', 'alignItems': 'center', 'justifyContent': 'flex-start',  'gap': '20px', 'margin': 'auto', 'width': '90%', "margin-top": "50px", "margin-bottom": "0"}),
-
-], style={'display': 'flex', 'flexDirection': 'column', 'width': '80vw', 'height': '100vh', 'backgroundColor': color_2, 'justifyContent': 'flex-start',
-          'position': 'fixed', 'top': '50%', 'left': '50%', 'transform': 'translate(-50%, -50%)',
-          'borderRadius': '10px', 'boxShadow': '0px 0px 10px 5px rgba(255,255,255,0.75)', "margin-top": "0", "margin-bottom": "0"})
-
-
-@app.callback(
-    Output('mainChart', 'figure'),
-    Input('time-range', 'value'),
-    Input('stock-symbol', 'value'),  # Add this line for the stock symbol input
-)
-def update_chart(selected_time_range, selected_stock_symbol):
-    if not selected_time_range:
-        selected_time_range = 'ytd'
-    if not selected_stock_symbol:
-        selected_stock_symbol = '^DJA'
-    symbol = yf.Ticker(selected_stock_symbol)
-    hist = symbol.history(period='max')
-    # plotly -> create
-    mainChart = make_subplots(rows=2, cols=1, shared_xaxes=True,
-                              row_heights=[0.3, 0.7], vertical_spacing=0.1, specs=[[{"secondary_y": False}], [{"secondary_y": True}]])
-    # <------------------------ Bottom Chart ------------------------>
-    # Candlestick main trace
-    mainChart.add_trace(go.Candlestick(x=hist.index,
-                                       open=hist['Open'],
-                                       high=hist['High'],
-                                       low=hist['Low'],
-                                       close=hist['Close'],
-                                       name='Price'), row=2, col=1)
-
-    # volume trace
-    hist['diff'] = hist['Close'] - hist['Open']
-    hist['color'] = 'red'  # Initialize 'color' column with 'red'
-    hist.loc[hist['diff'] >= 0, 'color'] = 'green'
-    mainChart.add_trace(go.Bar(x=hist.index, y=hist['Volume'], name='Volume', marker={
-                        'color': hist['color']}), secondary_y=True, row=2, col=1)
-    # MA20 trace
-    mainChart.add_trace(go.Scatter(x=hist.index, y=hist['Close'].rolling(
-        window=30).mean(), marker_color='blue', name='30 Day MA'), row=2, col=1)
-    # update x-axis range
-    if len(hist.index) < abs(timeFunc(selected_time_range)):
-        start_date = hist.index[timeFunc('max')]
-    else:
-        start_date = hist.index[timeFunc(selected_time_range)]
-    end_date = hist.index[-1]
-
-    # filter the data
-    filtered_data = hist[(hist.index >= start_date) & (hist.index <= end_date)]
-
-    start_date = filtered_data.index[0]
-    end_date = filtered_data.index[-1]
-    # Set x-axis initial range
-    mainChart.update_xaxes(range=[start_date, end_date], type='date', ticktext=filtered_data.index.strftime(
-        # Set to 'auto' or 'linear' based on your preference
-        '%b-%y'), tickvals=filtered_data.index, tickmode='auto',
-        nticks=10, row=2, col=1)
-    # Set y-axis range
-    # Calculate the minimum and maximum values for the Y-axis
-    offsetPercentage = max(hist['Close']) * 0.00  # 1
-    min_y = min(filtered_data['Low']) - offsetPercentage
-    max_y = max(filtered_data['High']) + offsetPercentage
-    mainChart.update_yaxes(range=[min_y, max_y],
-                           secondary_y=False, row=2, col=1)
-    # descale volume to percentage of y axis (8%)
-    avgVol = sum(filtered_data['Volume']) / len(filtered_data['Volume'])
-    VolumePercentageMaximizer = avgVol / 0.08
-    mainChart.update_yaxes(
-        range=[0, VolumePercentageMaximizer], secondary_y=True, row=2, col=1)
-
-    # <------------------------ Top Chart ------------------------>
-    # RSI trace
-    rsi = calculate_rsi(filtered_data)
-    mainChart.add_trace(go.Scatter(
-        x=rsi.index, y=rsi, marker_color='purple', name='RSI'), row=1, col=1)
-
-    # update title
-    mainChart.update_layout(
-        title={'text': symbol.info["symbol"], 'x': 0.5},
-        xaxis_rangeslider_visible=False,
-        xaxis2_rangeslider_visible=False,
-        plot_bgcolor='#ACCBE1',
-        paper_bgcolor='#FFF',
-        margin=dict(l=100, r=100, t=100, b=100, pad=10),
-        showlegend=False,
-    )
-    mainChart.update_yaxes(
-        showgrid=False,
-        gridcolor='white',
-        gridwidth=1,
-        secondary_y=False,
-        row=2,
-        col=1
-    )
-
-    # show chart
-    return mainChart
+def main():
+    """Main entry point for the application."""
+    try:
+        app = StockChartsApp()
+        app.run()
+    except KeyboardInterrupt:
+        logger.info("Application stopped by user")
+    except Exception as e:
+        logger.error(f"Failed to start application: {e}", exc_info=True)
+        sys.exit(1)
 
 
 if __name__ == '__main__':
-    app.run_server(debug=False)
+    main()
