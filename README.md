@@ -52,7 +52,7 @@ A professional stock analysis and technical indicators application built with Py
 1. **Clone the repository**
 
    ```bash
-   git clone https://github.com/your-username/StockCharts_Clone.git
+   git clone https://github.com/lukewaehner/StockCharts_Clone.git
    cd StockCharts_Clone
    ```
 
