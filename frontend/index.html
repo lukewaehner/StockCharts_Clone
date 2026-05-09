@@ -1,0 +1,42 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap"
+    />
+    <title>StockCharts</title>
+    <meta
+      name="description"
+      content="A calm, minimal stock chart viewer. Yahoo Finance data, Coinbase-style line charts, optional candlesticks and indicators."
+    />
+    <meta property="og:title" content="StockCharts" />
+    <meta
+      property="og:description"
+      content="A calm, minimal stock chart viewer."
+    />
+    <meta property="og:type" content="website" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <script>
+      // Set theme before React mounts to avoid a flash of the wrong palette.
+      (function () {
+        try {
+          var saved = localStorage.getItem("theme");
+          var theme = saved === "dark" || saved === "light" ? saved : "light";
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.style.colorScheme = theme;
+        } catch (e) {
+          document.documentElement.setAttribute("data-theme", "light");
+        }
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
